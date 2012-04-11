@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
 # The MIT License
 #
@@ -35,40 +36,58 @@ from string import Template
 
 # Define parameters:
 #
-# NOTE: prefix MUST be writeable, /opt/dxr is suggested
+# NOTE: prefix MUST be writeable,
+# NOTE: the following are set by default by the option parser:
+#       - prefix
+#       - web_prefix
+#       - hostname
 #
-prefix = os.path.join('/', 'opt', 'dxr')
-srcdir = os.path.join(prefix, 'source')
-builddir = os.path.join(prefix, 'build')
-webdir = os.path.join('/', 'srv', 'dxr', 'html')
-hostname = 'http://localhost'
+prefix = ''
+srcdir = ''
+builddir = ''
+web_prefix = ''
+hostname = ''
 buildenv = os.environ
-buildenv["PATH"] = os.path.join(prefix, 'bin') + ":" + buildenv["PATH"]
-
 
 def mkdir_p(path):
-        try:
-                os.makedirs(path)
-#       except OSError as exc: # Python >2.5
-#               if exc.errno == errno.EEXIST:
-#                       pass
-#               else:
-#                       raise
-        except OSError:
-                pass
+    try:
+        os.makedirs(path)
+#   except OSError as exc: # Python >2.5
+#       if exc.errno == errno.EEXIST:
+#           pass
+#       else:
+#           raise
+    except OSError:
+        pass
 
-def print_env():
-    print '--- Prefix = %s' % (prefix)
-    print '--- Source = %s' % (srcdir)
-    print '--- Build  = %s' % (builddir)
+def which(program, env):
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in env["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+
+def print_environment():
+    print '--- Prefix     = %s' % (prefix)
+    print '--- Source     = %s' % (srcdir)
+    print '--- Build      = %s' % (builddir)
     print
-    print '--- Web    = %s' % (webdir)
-    print '--- Host   = %s' % (hostname)
+    print '--- Web prefix = %s' % (web_prefix)
+    print '--- Hostname   = %s' % (hostname)
     print
-    print '--- PATH   = %s' % (buildenv["PATH"])
+    print '--- PATH       = %s' % (buildenv["PATH"])
     print
 
-def cmd_newconfig(name, srcdir, builddir, webdir, hostname):
+def cmd_new_config(name, srcdir, builddir, web_prefix, hostname):
     # Creates a .config file in XDG locations by default,
     #   e.g. $HOME/.config/dxr/$NAME
     #
@@ -81,7 +100,7 @@ templates=$srcdir/dxr/templates
 dxrroot=$srcdir/dxr
 
 [Web]
-wwwdir=$webdir
+wwwdir=$web_prefix
 virtroot=
 hosturl=$hostname
 
@@ -205,6 +224,30 @@ def cmd_bootstrap():
     print '<-- Done'
     return 0
 
+def cmd_sanity_check():
+     # Sanity check environment:
+     #   Check $prefix exists + is writeable
+     #   Check $srcdir exists + is writeable
+     #   Check $builddir exists + is writeable
+     #   Check $web_prefix exists + is writeable
+     #   Check llvm-config is executable (i.e. in path)
+     #
+     print '--> Sanity checking set up...'
+     print '-->   Checking locations exist and have correct permissions:'
+     print '-->     %s Prefix (%s)' % ('[Yes]' if os.access(prefix, os.W_OK) else '[No] ', prefix)
+     print '-->     %s Source (%s)' % ('[Yes]' if os.access(srcdir, os.W_OK) else '[No] ', srcdir)
+     print '-->     %s Build (%s)' % ('[Yes]' if os.access(builddir, os.W_OK) else '[No] ', builddir)
+     print '-->     %s Web Prefix (%s)' % ('[Yes]' if os.access(web_prefix, os.W_OK) else '[No] ', web_prefix)
+
+     print '-->   Checking binaries:'
+
+     rc = which('llvm-config', buildenv)
+     print '-->     %s llvm-config (%s)' % ('[Yes]' if rc != None else '[No] ', rc)
+
+     print
+     print '<-- Done'
+     return 0
+
 def main(args):
     if hasattr(os, 'getuid') and os.getuid() == 0:
         sys.stderr.write('You should not run %prog as root.\n')
@@ -215,46 +258,85 @@ def main(args):
 
     parser = optparse.OptionParser(usage,
 				   add_help_option=True,
-				   description='DXR source code indexer.')
+				   description='DXR source code indexer')
+
+    # Locations options
+    group = optparse.OptionGroup(parser,
+				 'Location Options',
+				 'Used for prefix configurations')
+    group.add_option('-p', '--prefix',
+		     metavar="PATH",
+		     dest='prefix',
+		     default=os.path.join('/', 'opt', 'dxr'),
+		     help='Sets the prefix to use before issuing any commands [default = %default]')
+    group.add_option('-w', '--web-prefix',
+		     metavar="PATH",
+		     dest='web_prefix',
+		     default=os.path.join('/', 'srv', 'dxr', 'html'),
+		     help='Sets the prefix for the website location [default = %default]')
+    group.add_option('-n', '--hostname',
+		     metavar="HOST",
+		     dest='hostname',
+		     default='http://localhost',
+		     help='Sets the hostname to use in the config for the website [default = %default]')
+    parser.add_option_group(group)
 
     # Debug options
     group = optparse.OptionGroup(parser,
 				 'Debug Options',
-				 'Used to follow the script more closely.')
-    group.add_option('-p', '--print-settings',
-                      action='count',
-                      dest='printsettings',
-                      help='Prints prefixes, directories and useful information used before operations')
+				 'Used to follow the script more closely')
+    group.add_option('-e', '--print-environment',
+		     action='count',
+		     dest='print_environment',
+		     help='Prints prefixes, directories and useful information used before operations')
     parser.add_option_group(group)
 
     # Main commands
     parser.add_option('-b', '--bootstrap',
                       action='count',
                       dest='bootstrap',
-                      help='Builds and installs LLVM & CLANG. Also sets up prefixes and paths.')
-    parser.add_option('-n', '--new-config',
-                      action='store',
+                      help='Builds and installs LLVM & CLANG. Also sets up prefixes and paths')
+    parser.add_option('-s', '--sanity-check',
+                      action='count',
+                      dest='sanity_check',
+                      help='Checks the current set up is sane')
+    parser.add_option('-c', '--new-config',
                       metavar="NAME",
-                      type='string',
-                      dest='newconfig',
-                      help='Creates a new DXR config file (expects project to exist in $srcdir/NAME)')
+                      dest='new_config',
+                      help='Creates a new DXR config file for a project')
 
     options, args = parser.parse_args(args)
 
-    if options.printsettings:
-        print_env()
+    # Set globals
+    global prefix, srcdir, builddir, web_prefix, hostname, buildenv
+    prefix = options.prefix
+    srcdir = os.path.join(prefix, 'source')
+    builddir = os.path.join(prefix, 'build')
+    web_prefix = options.web_prefix
+    hostname = options.hostname
+    buildenv["PATH"] = os.path.join(prefix, 'bin') + ":" + buildenv["PATH"]
 
-    if options.newconfig:
-        rc = cmd_newconfig(options.newconfig, srcdir, builddir, webdir, hostname)
-        if rc:
-            sys.exit(rc)
+    # Do something...
+    if options.print_environment:
+        print_environment()
 
     if options.bootstrap:
         rc = cmd_bootstrap()
         if rc:
             sys.exit(rc)
 
-    if not options.newconfig and not options.printsettings and not options.bootstrap:
+    if options.sanity_check:
+        rc = cmd_sanity_check()
+        if rc:
+            sys.exit(rc)
+
+    if options.new_config:
+        rc = cmd_new_config(options.new_config, srcdir, builddir, web_prefix, hostname)
+        if rc:
+            sys.exit(rc)
+
+    if not options.new_config and not options.sanity_check and \
+       not options.bootstrap and not options.print_environment:
         print 'Expected command'
         print
         print usage
