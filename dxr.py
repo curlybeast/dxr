@@ -33,10 +33,6 @@ import optparse
 from subprocess import call
 from string import Template
 
-import __builtin__
-__builtin__.__dict__['N_'] = lambda x: x
-
-
 # Define parameters:
 #
 # NOTE: prefix MUST be writeable, /opt/dxr is suggested
@@ -217,20 +213,25 @@ def main(args):
     usage = '%s command [ options ... ]\n' \
             '%s --help' % (sys.argv[0], sys.argv[0])
 
-    parser = optparse.OptionParser(
-        usage,
-        add_help_option=True,
-        description='Index source code and provide a web interface to traverse it.')
+    parser = optparse.OptionParser(usage,
+				   add_help_option=True,
+				   description='DXR source code indexer.')
 
-    #parser.disable_interspersed_args()
+    # Debug options
+    group = optparse.OptionGroup(parser,
+				 'Debug Options',
+				 'Used to follow the script more closely.')
+    group.add_option('-p', '--print-settings',
+                      action='count',
+                      dest='printsettings',
+                      help='Prints prefixes, directories and useful information used before operations')
+    parser.add_option_group(group)
+
+    # Main commands
     parser.add_option('-b', '--bootstrap',
                       action='count',
                       dest='bootstrap',
                       help='Builds and installs LLVM & CLANG. Also sets up prefixes and paths.')
-    parser.add_option('-p', '--print-settings',
-                      action='count',
-                      dest='printsettings',
-                      help='Prints prefixes, directories and useful information used before operations')
     parser.add_option('-n', '--new-config',
                       action='store',
                       metavar="NAME",
