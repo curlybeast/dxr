@@ -76,6 +76,61 @@ def which(program, env):
 
     return None
 
+def print_documentation():
+    print '''
+Generally to use DXR for your project from a blank canvas, you need to
+do the following:
+
+1. Run the --bootstrap command.
+
+   This will ensure you have the directories and conditions set up to
+   start building your project. This includes a prefix which all
+   source directory is contained within and a build directory where
+   all your sources are indexed into by DXR. There is also a web
+   prefix which is the location of your Apache (or other) website HTML
+   directory. This must be in place for the final indexing stage, but
+   the bootstrap command ensures it exists and can be written to.
+
+   The next part is to build LLVM and CLANG and install them into the
+   prefix. This is what Mozilla use for mozilla-central and CLANG
+   offers more information about C and C++ projects which we export
+   through the web interface. A part of this is to build the cxx-clang
+   plugin in the DXR source directory. The bootstrap command will git
+   clone and build all of the sources you need here and install them.
+   So prefix *must* be writeable.
+
+2. Run the --new-config command.
+
+   This creates the config which DXR uses for all operational
+   purposes, e.g. to index your project, to store the database with
+   the indexed information, how to update your project from the
+   original repository, etc.
+
+3. Run the --sanity-check command (optional).
+
+   This ensures the prefix and other locations you're using actually
+   are usable (i.e. writeable). It will also check the bootstrap stage
+   worked and the necessary commands are in place to index your
+   project.
+
+4. Run the --shell command. (NOT AVAILABLE YET)
+
+   This sets up your environment so LLVM/CLANG are used to build your
+   project. Once in the shell you need to build your project,
+   typically using:
+
+     ./configure --prefix=$prefix (e.g. /opt/dxr)
+
+5. Run the --index command. (NOT AVAILABLE YET)
+
+   This indexes your built sources and creates a database according to
+   the configutation we created in step #2.
+
+There will be more information here to come, but this is the basic
+concept of work flow to get your project indexed by DXR.
+
+'''
+
 def print_environment():
     print '--- Prefix     = %s' % (prefix)
     print '--- Source     = %s' % (srcdir)
@@ -292,6 +347,10 @@ def main(args):
     parser.add_option_group(group)
 
     # Main commands
+    parser.add_option('-i', '--documentation',
+                      action='count',
+                      dest='documentation',
+                      help='Explains the process of creating a DXR set up and how to use this command')
     parser.add_option('-b', '--bootstrap',
                       action='count',
                       dest='bootstrap',
@@ -317,6 +376,10 @@ def main(args):
     buildenv["PATH"] = os.path.join(prefix, 'bin') + ":" + buildenv["PATH"]
 
     # Do something...
+    if options.documentation:
+        print_documentation()
+        sys.exit(0)
+
     if options.print_environment:
         print_environment()
 
@@ -335,7 +398,8 @@ def main(args):
         if rc:
             sys.exit(rc)
 
-    if not options.new_config and not options.sanity_check and \
+    if not options.documentation and \
+       not options.new_config and not options.sanity_check and \
        not options.bootstrap and not options.print_environment:
         print 'Expected command'
         print
